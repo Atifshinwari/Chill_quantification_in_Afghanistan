@@ -1,0 +1,959 @@
+---
+title: "BiasCorrection"
+author: "Atifullah Shinwari"
+date: "2023-01-25"
+output: html_document
+---
+
+#------------------------------------------------------------------------------------------#
+# 1: Bias correction for one station: First for Observed temperature data for Adraskan
+#------------------------------------------------------------------------------------------#
+```{r,echo=FALSE}
+#Reading the stations data 
+Adraskan_AT_Obs <- read.csv("D:/Rdata/Stations_Obs/Adraskan_AT_Obs.csv")
+Adraskan_Simulated <- read.csv("D:/Rdata/Stations_Sim/Adraskan_Simulated.csv")
+
+#Renaming the column names of Observed station
+colnames(Adraskan_AT_Obs)[6] <- "Tmin_Obs"
+colnames(Adraskan_AT_Obs)[7] <- "Tmax_Obs"
+print(Adraskan_AT_Obs)
+
+#Renaming the column names of Simulated station
+colnames(Adraskan_Simulated)[1] <- "Date"
+colnames(Adraskan_Simulated)[2] <- "Tmin_Sim"
+colnames(Adraskan_Simulated)[3] <- "Tmax_Sim"
+print(Adraskan_Simulated)
+
+#Extract the desired time series from simulated stations
+Adraskan_Simulated <- Adraskan_Simulated[10593:15341,]
+
+write.csv(Adraskan_Simulated, "Sim_Save/Adraskan_AT_Sim.csv")
+Adraskan_AT_Sim <- read.csv("Sim_Save/Adraskan_AT_Sim.csv")
+```
+
+```{r,echo=FALSE}
+#Merging the two Obs and Sim to ease plotting
+Adraskan_Obs_Sim <- merge(Adraskan_AT_Obs, Adraskan_AT_Sim, by = c("Date"))
+#Choosing the wanted columns
+Adraskan_Obs_Sim <- Adraskan_Obs_Sim[c("Date", "Year", "Month", "Day", "Tmin_Obs", "Tmax_Obs", "Tmin_Sim", "Tmax_Sim")]
+write.csv(Adraskan_Obs_Sim, "Stations_Obs_Sim/Adraskan_Obs_Sim.csv")
+```
+
+```{r,echo=FALSE,message=FALSE}
+require(ggplot2)
+# Plotting Adraskan Tmin for both Obs and Sim 
+
+Adraskan_Plot_Tmin <- ggplot(data = Adraskan_Obs_Sim, aes(x = Tmin_Obs, y = Tmin_Sim))
+  geom_point(alpha = 0.2)+
+  geom_abline(slope = 1, linetype = "dashed") +
+  xlab("Tmin Observed") + 
+  ylab("Tmin Climate Engine") + 
+  scale_y_continuous(limits = c(-20,40)) +
+  scale_x_continuous(limits = c(-20,40)) +
+  #facet_wrap( ~ format(x = as.Date(Date))) +
+  facet_wrap(~Year) +
+#facet_wrap( ~ format(as.Date(Date), "%Y"))
+
+ggsave("Plots/Adraskan_Plot_Tmin.png",width = 20,height = 10, units = "cm",dpi = 600)
+
+# Plotting Adraskan Tmax for both Obs and Sim 
+Adraskan_Plot_Tmax <- ggplot(data = Adraskan_Obs_Sim, aes(x = Tmax_Obs, y = Tmax_Sim)) + 
+  geom_point(alpha = 0.2)+
+  geom_abline(slope = 1, linetype = "dashed") +
+  xlab("Tmax Observed") + 
+  ylab("Tmax Climate Engine") + 
+  scale_y_continuous(limits = c(-20,40)) +
+  scale_x_continuous(limits = c(-20,40)) +
+  facet_wrap( ~ format(x = as.Date(Date))) +
+facet_wrap( ~ format(as.Date(Date), "%Y"))
+
+ggsave("Plots/Adraskan_Plot_Tmax.png",width = 20,height = 10, units = "cm",dpi = 600)
+
+#Merging the two plots Tmin and Tmax
+Adraskan_Plot_Tmin_Tmax <- Adraskan_Plot_Tmin + Adraskan_Plot_Tmax
+
+ggsave("Plots/Adraskan_Plot_Tmin_Tmax.png",width = 20,height = 10, units = "cm",dpi = 600)
+```
+
+# Calculating the difference between Obs and Sim data for Adraskan (2008:2020)
+
+```{r,echo=FALSE}
+require(chillR)
+library(tidyverse)
+library(dplyr)
+require(lubridate)
+require(kableExtra)
+# Since we do a linear bias correction we do it based on the months of each year using lubridate function
+Adraskan_Obs_Sim$Month <- lubridate::month(Adraskan_Obs_Sim$Date)
+
+# Now we calculate the difference and other statistical indicators for Tmin and Tmax
+Adraskan_Statistics <- Adraskan_Obs_Sim %>% 
+  group_by(Month) %>% 
+            # For Tmin
+  summarise(Mean_Bias_Tmin = mean(Tmin_Obs-Tmin_Sim),
+            SD_Tmin=sd(Tmin_Obs-Tmin_Sim),
+            #RMSEP_Tmin=RMSEP(Tmin_Sim,Tmin_Obs),
+            #RPIQ_Tmin=RPIQ(Tmin_Sim,Tmin_Obs),
+            
+            #For Tmax
+            Mean_Bias_Tmax = mean(Tmax_Obs-Tmax_Sim),
+            SD_Tmax=sd(Tmax_Obs-Tmax_Sim))
+            #RMSEP_Tmax=RMSEP(Tmax_Sim,Tmax_Obs),
+            #RPIQ_Tmax=RPIQ(Tmax_Sim,Tmax_Obs))
+
+kable(Adraskan_Statistics) %>%
+  kable_styling("striped", position = "left", font_size = 10)
+
+
+```
+
+```{r}
+Adraskan_Statistics_Ave <- Adraskan_Statistics %>%
+  summarise(Mean_bias_Tmin = mean(Adraskan_Statistics$Mean_Bias_Tmin),
+            SD_Tmin = mean(Adraskan_Statistics$SD_Tmin),
+            Mean_bias_Tmax = mean(Adraskan_Statistics$Mean_Bias_Tmax),
+            SD_Tmax = mean(Adraskan_Statistics$SD_Tmax))
+
+kable(Adraskan_Statistics_Ave, caption = "Summary of the average values for mean bias and SD") %>%
+  kable_styling("striped", position = "left", font_size = 10)
+```
+
+# Comparison between available temperature data
+
+```{r,echo=FALSE}
+#Now merging these statistical indicators into the original dataframe to ease bias correction in the next functions
+Adraskan_Obs_Sim <- merge(Adraskan_Obs_Sim, Adraskan_Statistics, by = "Month")
+
+#Bias correction
+
+#Now I will do bias correction for Tmin and Tmax in new columns as Tmin_BC and Tmax_BC:  
+# Tmin 
+Adraskan_Obs_Sim$TminBC <- Adraskan_Obs_Sim$Tmin_Sim + Adraskan_Obs_Sim$Mean_Bias_Tmin
+
+# Tmax
+Adraskan_Obs_Sim$TmaxBC <- Adraskan_Obs_Sim$Tmax_Sim + Adraskan_Obs_Sim$Mean_Bias_Tmax
+
+```
+
+```{r,echo=FALSE}
+# Again calculating the statistical indicators for Tmin and Tmax after bias correction
+Adraskan_Statistics_BC <- Adraskan_Obs_Sim %>% 
+  group_by(Month) %>% 
+            # For Tmin
+  summarise(#Mean_Bias_Tmin = mean(Tmin_Obs-TminBC),
+            SD_Tmin=sd(Tmin_Obs-TminBC),
+            RMSEP_Tmin=RMSEP(Tmin_Sim,Tmin_Obs),
+            RMSEP_TminBC=RMSEP(TminBC, Tmin_Obs),
+            RPIQ_Tmin=RPIQ(Tmin_Sim,Tmin_Obs),
+            RPIQ_TminBC=RPIQ(TminBC, Tmin_Obs),
+            
+            
+            #For Tmax
+            #Mean_Bias_Tmax = mean(Tmax_Obs-TmaxBC),
+            SD_Tmax=sd(Tmax_Obs-TmaxBC),
+            RMSEP_Tmax=RMSEP(Tmax_Sim,Tmax_Obs),
+            RMSEP_TmaxBC=RMSEP(TmaxBC, Tmax_Obs),
+            RPIQ_Tmax=RPIQ(Tmax_Sim,Tmax_Obs),
+            RPIQ_TmaxBC=RPIQ(TmaxBC, Tmax_Obs))
+
+
+
+
+kable(Adraskan_Statistics_BC) %>%
+  kable_styling("striped", position = "left", font_size = 10)
+```
+
+```{r,echo=FALSE}
+# Taking colum average for finding mean
+# Adraskan_Statistics_Ave_BC <- Adraskan_Statistics_BC %>%
+#   summarise(SD_Tmin = mean(Adraskan_Statistics_BC$SD_Tmin),
+#             RMSEP_Tmin = mean(Adraskan_Statistics_BC$RMSEP_TminBC),
+#             RPIQ_Tmin = mean(Adraskan_Statistics_BC$RPIQ_TminBC),
+#             SD_Tmax = mean(Adraskan_Statistics_BC$SD_Tmax),
+#             RMSEP_Tmax= mean(Adraskan_Statistics_BC$RMSEP_TmaxBC),
+#             RPIQ_Tmax = mean(Adraskan_Statistics_BC$RPIQ_TmaxBC))
+# 
+# 
+# kable(Adraskan_Statistics_Ave_BC, caption = "Summary of the mean statistics after bias correction") %>%
+#   kable_styling("striped", position = "left", font_size = 10)
+```
+
+```{r}
+require(knitr)
+require(tidyr)
+#Calculating overall statistical indicators
+#Tmin
+Adraskan_Statistics_Tmin <- Adraskan_Obs_Sim %>% 
+  summarise(Mean_biasTmin = mean(Adraskan_Obs_Sim$Tmin_Obs - Adraskan_Obs_Sim$Tmin_Sim),
+            #mean(Adraskan_Obs_Sim$Tmin_Obs - Adraskan_Obs_Sim$TminBC)
+            SDTmin = sd(Adraskan_Obs_Sim$Tmin_Obs - Adraskan_Obs_Sim$Tmin_Sim),
+            SDTminBC = sd(Adraskan_Obs_Sim$Tmin_Obs - Adraskan_Obs_Sim$TminBC),
+            RMSEP_Tmin = RMSEP(Adraskan_Obs_Sim$Tmin_Sim, Adraskan_Obs_Sim$Tmin_Obs),
+            RMSEP_TminBC = RMSEP(Adraskan_Obs_Sim$TminBC, Adraskan_Obs_Sim$Tmin_Obs),
+            RPIQ_Tmin = RPIQ(Adraskan_Obs_Sim$Tmin_Sim, Adraskan_Obs_Sim$Tmin_Obs),
+            RPIQ_TminBC = RPIQ(Adraskan_Obs_Sim$TminBC, Adraskan_Obs_Sim$Tmin_Obs))
+#Tmax
+Adraskan_Statistics_Tmax <- Adraskan_Obs_Sim %>% 
+  summarise(Mean_biasTmax = mean(Adraskan_Obs_Sim$Tmax_Obs - Adraskan_Obs_Sim$Tmax_Sim),
+            #mean(Adraskan_Obs_Sim$Tmax_Obs - Adraskan_Obs_Sim$TmaxBC)
+            SD_Tmax = sd(Adraskan_Obs_Sim$Tmax_Obs - Adraskan_Obs_Sim$Tmax_Sim),
+            SD_TmaxBC = sd(Adraskan_Obs_Sim$Tmax_Obs - Adraskan_Obs_Sim$TmaxBC),
+            RMSEP_Tmax = RMSEP(Adraskan_Obs_Sim$Tmax_Sim, Adraskan_Obs_Sim$Tmax_Obs),
+            RMSEP_TmaxBC = RMSEP(Adraskan_Obs_Sim$TmaxBC, Adraskan_Obs_Sim$Tmax_Obs),
+            RPIQ_Tmax = RPIQ(Adraskan_Obs_Sim$Tmax_Sim, Adraskan_Obs_Sim$Tmax_Obs),
+            RPIQ_TmaxBC = RPIQ(Adraskan_Obs_Sim$TmaxBC, Adraskan_Obs_Sim$Tmax_Obs))
+#Merging the Tmin and Tmax
+Adraskan_Statistics_TminTmax <- cbind(Adraskan_Statistics_Tmin, Adraskan_Statistics_Tmax)
+
+kable(format(Adraskan_Statistics_TminTmax, digits = 4, caption = "Summary of the mean statistics")) %>%
+  kable_styling("striped", position = "left", font_size = 10, full_width = F)
+
+#Formatting
+Average_Statistics_Adraskan <- data.frame(No = 1, 
+                           Station_name = "Adraskan", 
+                           Temperature = c("Tmin", "Tmax"),
+                           Bias.before = c(Adraskan_Statistics_TminTmax$Mean_biasTmin, Adraskan_Statistics_TminTmax$Mean_biasTmax), 
+                           SD.before = c(Adraskan_Statistics_TminTmax$SDTmin, Adraskan_Statistics_TminTmax$SD_Tmax), 
+                           RMSEP.before = c(Adraskan_Statistics_TminTmax$RMSEP_Tmin, Adraskan_Statistics_TminTmax$RMSEP_Tmax), 
+                           RPIQ.before = c(Adraskan_Statistics_TminTmax$RPIQ_Tmin, Adraskan_Statistics_TminTmax$RPIQ_Tmax), 
+                           SD.after = c(Adraskan_Statistics_TminTmax$SDTminBC, Adraskan_Statistics_TminTmax$SD_TmaxBC), 
+                           RMSEP.after = c(Adraskan_Statistics_TminTmax$RMSEP_TminBC, Adraskan_Statistics_TminTmax$RMSEP_TmaxBC), 
+                           RPIQ.after = c(Adraskan_Statistics_TminTmax$RPIQ_TminBC, Adraskan_Statistics_TminTmax$RPIQ_TmaxBC))
+
+```
+
+```{r,echo=FALSE}
+# As of now, I have only made a bias correction for the climate data with available observed data and I am saving it now.
+
+write.csv(Adraskan_Obs_Sim, "Stations_Obs_Sim/Adraskan_Obs_Sim.csv")
+write.csv(Adraskan_Statistics_BC, "Stations_Obs_Sim/Adraskan_Statistics_BC.csv")
+write.csv(Average_Statistics_Adraskan, "Stations_Obs_Sim/Average_Statistics_Adraskan")
+```
+
+#------------------------------------------------------------------------------------------#
+# 2: Bias correction of Adraskan historical temperature data
+#------------------------------------------------------------------------------------------#
+
+```{r}
+# Bias correction of the temperature time series with no observed data available:
+Adraskan_Simulated <- read.csv("D:/Rdata/Stations_Sim/Adraskan_Simulated.csv")
+
+#Renaming the column names of Simulated station
+colnames(Adraskan_Simulated)[1] <- "Date"
+colnames(Adraskan_Simulated)[2] <- "Tmin_Sim"
+colnames(Adraskan_Simulated)[3] <- "Tmax_Sim"
+print(Adraskan_Simulated)
+
+#Extract the desired time series from simulated stations
+Adraskan_Simulated <- Adraskan_Simulated[366:10592,]
+```
+
+```{r,echo=FALSE}
+Adraskan_Simulated$Month <- lubridate::month(Adraskan_Simulated$Date)
+
+Adraskan_Simulated <- merge(Adraskan_Simulated, Adraskan_Statistics, by = "Month")
+
+#Now I will do bias correction for Tmin and Tmax in new columns as Tmin_BC and Tmax_BC:  
+# Tmin
+
+Adraskan_Simulated$TminBC <- Adraskan_Simulated$Tmin_Sim + Adraskan_Simulated$Mean_Bias_Tmin
+# Tmax
+Adraskan_Simulated$TmaxBC <- Adraskan_Simulated$Tmax_Sim + Adraskan_Simulated$Mean_Bias_Tmax
+```
+
+```{r}
+#Merging the two temperature series (Observed with bias corrected)
+
+#1 Cleaning recent (Obs)
+#Choosing the wanted columns
+Recent_Obs <- Adraskan_Obs_Sim[,c("Date", "TminBC", "TmaxBC")]
+
+#Recent_Obs <- Adraskan_Obs_Sim[-c(1,3,4,7,8,9,10,11,12,13,14)]
+#Renaming the column names
+colnames(Recent_Obs)[2] <- "Tmin"
+colnames(Recent_Obs)[3] <- "Tmax"
+print(Recent_Obs)
+
+#2 Cleaning historic (BC)
+Historic_BC <- Adraskan_Simulated[,c("Date", "TminBC", "TmaxBC")]
+#Renaming the column names
+colnames(Historic_BC)[2] <- "Tmin"
+colnames(Historic_BC)[3] <- "Tmax"
+print(Historic_BC)
+
+# Mergin the two dataframe by stacking on the top of each other- both rows should have same colums
+Adraskan_AT <- rbind(Historic_BC, Recent_Obs)
+
+rownames(Adraskan_AT) <- 1:nrow(Adraskan_AT)
+print(Adraskan_AT)
+
+write.csv(Adraskan_AT, "Stations_Obs_Sim/Adraskan_AT.csv")
+```
+
+```{r,echo=FALSE}
+mean(Adraskan_Simulated$TminBC - Adraskan_Simulated$Tmin_Sim)
+sd(Adraskan_Simulated$TminBC - Adraskan_Simulated$Tmin_Sim)
+RMSEP(Adraskan_Simulated$Tmin_Sim, Adraskan_Simulated$TminBC)
+RPIQ(Adraskan_Simulated$Tmin_Sim, Adraskan_Simulated$TminBC)
+```
+
+```{r,echo=FALSE}
+mean(Adraskan_Simulated$TmaxBC - Adraskan_Simulated$Tmax_Sim)
+sd(Adraskan_Simulated$TmaxBC - Adraskan_Simulated$Tmax_Sim)
+RMSEP(Adraskan_Simulated$Tmax_Sim, Adraskan_Simulated$TmaxBC)
+RPIQ(Adraskan_Simulated$Tmax_Sim, Adraskan_Simulated$TmaxBC)
+
+rm(Historic_BC)
+
+```
+
+#------------------------------------------------------------------------------------------#
+# 3: Looping the method for all the remaining stations
+#------------------------------------------------------------------------------------------#
+
+```{r}
+# require(dplyr)
+# require(chillR)
+# require(patchwork)
+# require(ggplot2)
+# library(tidyverse)
+# require(lubridate)
+# require(kableExtra)
+# library(progress)
+
+#Loading the stations data 
+Weather_Obs_List <-  chillR::load_temperature_scenarios("Stations_Obs", prefix = "")
+Weather_Sim_List <- chillR::load_temperature_scenarios("Stations_Sim", prefix = "")
+
+#Since the files names are not there, we used list.file to show the names
+fnames <- list.files("Stations_Obs")
+#The names are split by _ however there are still three characters now we assign it to 
+#each name using purrr function which works as a loop.
+Weather_Names <- str_split(fnames, pattern = "_") %>% 
+  purrr::map_chr(1)
+
+#assign the list of names to the data set
+names(Weather_Obs_List) <- Weather_Names
+names(Weather_Sim_List) <- Weather_Names
+
+weather_statistics_list <- list()
+weather_statistics_BC_list <- list()
+weather_statistics_average_list <- list()
+
+#list all files of simulated weather data
+weather_simulated_files <- list.files("Stations_Sim/")
+
+pb = txtProgressBar(min = 0, max = length(Weather_Obs_List), initial = 0, style = 3) 
+
+
+#writing a loop
+for(i in 1:length(Weather_Obs_List)){
+  
+  Weather_Sim <- Weather_Sim_List[[i]]
+  Weather_Obs <- Weather_Obs_List[[i]]
+  
+  colnames(Weather_Sim) <-  c("Date", "Tmin_Sim", "Tmax_Sim")
+  Weather_Sim$Tmin_Sim <- as.numeric(Weather_Sim$Tmin_Sim)
+  Weather_Sim$Tmax_Sim <- as.numeric(Weather_Sim$Tmax_Sim)
+  
+  colnames(Weather_Obs)[6] <- "Tmin_Obs"
+  colnames(Weather_Obs)[7] <- "Tmax_Obs"
+  Weather_Obs$Tmin_Obs <- as.numeric(Weather_Obs$Tmin_Obs)
+  Weather_Obs$Tmax_Obs <- as.numeric(Weather_Obs$Tmax_Obs)
+  
+  #test which date format we have
+  
+  candidate1 <- lubridate::ymd(Weather_Obs$Date[1])
+  candidate2 <- lubridate::dmy(Weather_Obs$Date[1])
+  #candidate3 <- lubridate::dmy_hms(Weather_Obs$Date[1])
+  
+  #take the candidate which is not an NA
+  if(is.na(candidate1) == FALSE & is.na(candidate2) == TRUE){
+    start_date <- candidate1
+    end_date <- lubridate::ymd(Weather_Obs$Date[nrow(Weather_Obs)])
+    Weather_Obs$Date <- lubridate::ymd(Weather_Obs$Date)
+    
+    
+  } else if(is.na(candidate1) == TRUE & is.na(candidate2) == FALSE){
+    start_date <- candidate2
+    end_date <- lubridate::dmy(Weather_Obs$Date[nrow(Weather_Obs)])
+    Weather_Obs$Date <- lubridate::dmy(Weather_Obs$Date)
+  }
+  
+
+      Weather_Sim <- Weather_Sim[lubridate::ymd(Weather_Sim$Date) >=  start_date & lubridate::ymd(Weather_Sim$Date) <=  end_date,]
+      
+      #make sure that weather_sim$Date is in a date format
+      #otherwise merging does not work
+  Weather_Sim$Date <- lubridate::ymd(Weather_Sim$Date)
+
+
+  
+  #Merging the two Obs and Sim to ease plotting
+  Weather_Obs_Sim <- merge(Weather_Obs, Weather_Sim, by = c("Date"))
+  
+  #Choosing the columns needed
+  Weather_Obs_Sim <- Weather_Obs_Sim[c("Date", "Year", "Month", "Day", "Tmin_Obs", 
+                                         "Tmax_Obs", "Tmin_Sim", "Tmax_Sim")]
+  
+  #Plotting
+
+  # Plotting Tmin for both Obs and Sim 
+    Weather_Plot_Tmin <- Weather_Obs_Sim %>%
+mutate(Year = lubridate::year(Date)) %>%
+ggplot(aes(x = Tmin_Obs, y = Tmin_Sim))+ #ggplot(data = Weather_Obs_Sim, aes(x = Tmin_Obs, y = Tmin_Sim)) +
+    geom_point(alpha = 0.2) +
+    geom_abline(slope = 1, linetype = "dashed") +
+    xlab("Tmin Observed") + 
+    ylab("Tmin Simulated") + 
+    scale_y_continuous(limits = c(-30,45)) +
+    scale_x_continuous(limits = c(-30,45)) +
+    #facet_wrap( ~ format(x = as.Date(Date))) +
+    #facet_wrap( ~ format(as.Date(Date), "%Y"))
+    facet_wrap(~Year)
+  
+  #ggsave(plot = Weather_Plot_Tmin, filename = paste0("Plots/", Weather_Names[i],"_Plot_Tmin.jpeg"), height = 10, width = 15, units = "cm" )
+  
+  # Plotting Adraskan Tmax for both Obs and Sim 
+  Weather_Plot_Tmax <- ggplot(data = Weather_Obs_Sim, aes(x = Tmax_Obs, y = Tmax_Sim)) + 
+    geom_point(alpha = 0.2) +
+    geom_abline(slope = 1, linetype = "dashed") +
+    xlab("Tmax Observed") + 
+    ylab("Tmax Simulated") + 
+    scale_y_continuous(limits = c(-30,45)) +
+    scale_x_continuous(limits = c(-30,45)) +
+    #facet_wrap( ~ format(x = as.Date(Date))) +
+    #facet_wrap( ~ format(as.Date(Date), "%Y"))
+    facet_wrap(~Year)
+
+  
+  #ggsave(plot = Weather_Plot_Tmax, filename = paste0("Plots/", Weather_Names[i], "_Plot_Tmax.jpeg"), height = 10, width = 15, units = "cm" )
+  
+  #Merging the two plots Tmin and Tmax
+  Weather_Plot_Tmin_Tmax <- Weather_Plot_Tmin + Weather_Plot_Tmax
+  
+  #ggsave(plot = Weather_Plot_Tmin_Tmax, filename = paste0("Plots/", Weather_Names[i], "_Plot_Tmin_Tmax.jpeg"), height = 10, width = 18, units = "cm" )
+  #fname <- paste0("Plots/", weather_names[i],"_Plot_Tmax.jpeg")
+  
+  
+  # Calculating the difference between Obs and Sim data for stations (2008:2020)
+
+  # Since we do a linear bias correction we do it based on the months of each year using lubridate function
+  Weather_Obs_Sim$Month <- lubridate::month(Weather_Obs_Sim$Date)
+  
+  # Now we calculate the difference and other statistical indicators for Tmin and Tmax
+  Weather_Statistics <- Weather_Obs_Sim %>% 
+    group_by(Month) %>% 
+    # For Tmin
+    summarise(Mean_Bias_Tmin = mean(Tmin_Obs-Tmin_Sim),
+              SD_Tmin=sd(Tmin_Obs-Tmin_Sim),
+              #RMSEP_Tmin=RMSEP(Tmin_Sim,Tmin_Obs),
+              #RPIQ_Tmin=RPIQ(Tmin_Sim,Tmin_Obs),
+              
+              #For Tmax
+              Mean_Bias_Tmax = mean(Tmax_Obs-Tmax_Sim),
+              SD_Tmax=sd(Tmax_Obs-Tmax_Sim))
+  #RMSEP_Tmax=RMSEP(Tmax_Sim,Tmax_Obs),
+  #RPIQ_Tmax=RPIQ(Tmax_Sim,Tmax_Obs))
+  
+  # kable(Weather_Statistics) %>%
+  #   kable_styling("striped", position = "left", font_size = 10)
+  
+  #lets save the table in a list
+  weather_statistics_list[[i]] <- Weather_Statistics
+
+  # Comparison between available temperature data 
+  
+  #Now merging these statistical indicators into the original dataframe to ease bias correction in the next functions
+  Weather_Obs_Sim <- merge(Weather_Obs_Sim, Weather_Statistics, by = "Month")
+  
+  #Bias correction
+  
+  #Now I will do bias correction for Tmin and Tmax in new columns as Tmin_BC and Tmax_BC:  
+  # Tmin 
+  Weather_Obs_Sim$TminBC <- Weather_Obs_Sim$Tmin_Sim + Weather_Obs_Sim$Mean_Bias_Tmin
+  
+  # Tmax
+  Weather_Obs_Sim$TmaxBC <- Weather_Obs_Sim$Tmax_Sim + Weather_Obs_Sim$Mean_Bias_Tmax
+
+  
+  # Again calculating the statistical indicators for Tmin and Tmax after bias correction
+  
+  Weather_Statistics_BC <- Weather_Obs_Sim %>% 
+    group_by(Month) %>% 
+    
+    # For Tmin
+    summarise(Mean_Bias_Tmin = mean(Tmin_Obs-Tmin_Sim),
+      SD_Tmin=sd(Tmin_Obs-Tmin_Sim),
+      SD_TminBC=sd(Tmin_Obs-TminBC),
+      RMSEP_Tmin=RMSEP(Tmin_Sim,Tmin_Obs, na.rm=TRUE),
+      RMSEP_TminBC=RMSEP(TminBC, Tmin_Obs, na.rm=TRUE),
+      RPIQ_Tmin=RPIQ(Tmin_Sim,Tmin_Obs,na.rm=TRUE),
+      RPIQ_TminBC=RPIQ(TminBC, Tmin_Obs, na.rm=TRUE),
+      
+      
+      #For Tmax
+      Mean_Bias_Tmax = mean(Tmax_Obs-Tmax_Sim),
+      SD_Tmax=sd(Tmax_Obs-Tmax_Sim),
+      SD_TmaxBC=sd(Tmax_Obs-TmaxBC),
+      RMSEP_Tmax=RMSEP(Tmax_Sim,Tmax_Obs, na.rm=TRUE),
+      RMSEP_TmaxBC=RMSEP(TmaxBC, Tmax_Obs, na.rm=TRUE),
+      RPIQ_Tmax=RPIQ(Tmax_Sim,Tmax_Obs, na.rm=TRUE),
+      RPIQ_TmaxBC=RPIQ(TmaxBC, Tmax_Obs, na.rm=TRUE))
+  
+  
+  weather_statistics_BC_list[[i]] <- Weather_Statistics_BC
+  
+  
+  #Calculating overall statistical indicators
+      # For Tmin
+Weather_Statistics_BC_Tmin <- Weather_Obs_Sim %>% 
+    summarise(Mean_Bias_Tmin = mean(Tmin_Obs-Tmin_Sim),
+      SD_Tmin=sd(Tmin_Obs-Tmin_Sim),
+      SD_TminBC=sd(Tmin_Obs-TminBC),
+      RMSEP_Tmin=RMSEP(Tmin_Sim,Tmin_Obs, na.rm=TRUE),
+      RMSEP_TminBC=RMSEP(TminBC, Tmin_Obs, na.rm=TRUE),
+      RPIQ_Tmin=RPIQ(Tmin_Sim,Tmin_Obs,na.rm=TRUE),
+      RPIQ_TminBC=RPIQ(TminBC, Tmin_Obs, na.rm=TRUE))
+      
+      
+      #For Tmax
+Weather_Statistics_BC_Tmax <- Weather_Obs_Sim %>% 
+   summarise(Mean_Bias_Tmax = mean(Tmax_Obs-Tmax_Sim),
+      SD_Tmax=sd(Tmax_Obs-Tmax_Sim),
+      SD_TmaxBC=sd(Tmax_Obs-TmaxBC),
+      RMSEP_Tmax=RMSEP(Tmax_Sim,Tmax_Obs, na.rm=TRUE),
+      RMSEP_TmaxBC=RMSEP(TmaxBC, Tmax_Obs, na.rm=TRUE),
+      RPIQ_Tmax=RPIQ(Tmax_Sim,Tmax_Obs, na.rm=TRUE),
+      RPIQ_TmaxBC=RPIQ(TmaxBC, Tmax_Obs, na.rm=TRUE))
+
+#Merging the Tmin and Tmax
+Weather_Statistics_Tmin_Tmax <- cbind(Weather_Statistics_BC_Tmin, Weather_Statistics_BC_Tmax)
+  
+weather_statistics_average_list[[i]] <- Weather_Statistics_Tmin_Tmax
+
+# Plotting bias corrected calibration period
+#Arranged_Weather_Obs_Sim <- Weather_Obs_Sim[order(as.Date(Weather_Obs_Sim$Date, format="%m/%d/%Y")),]
+#Tmin
+  # Weather_PlotBC_Tmin <- ggplot(Weather_Obs_Sim, aes(x = Date, y = Tmin_Obs, group = 1)) + 
+  #   geom_line(lwd=0.3) + 
+  #   xlab("Time series of temperature data") + 
+  #   ylab("Daily minimum temperature (°C)") + 
+  #   #scale_x_discrete(breaks = function(x) x[seq(1, length(x), by = 4*700)]) +
+  #   geom_line(data = Weather_Obs_Sim, aes(x = Date, y = Tmin_Sim), col="blue",lwd=0.3) +
+  #   geom_line(data = Weather_Obs_Sim, aes(x = Date, y = TminBC), col="red",lwd=0.3) + 
+  #   #scale_y_continuous(limits = c(-30,45)) + 
+  #   expand_limits(y = c(min(Weather_Obs_Sim$Tmin_Obs), max(Weather_Obs_Sim$Tmin_Obs))) +
+  #   facet_wrap(~ format(Date, "%Y"), scales = "free_x")
+  # 
+  # Weather_PlotBC_Tmin <- Weather_PlotBC_Tmin + scale_x_date(date_labels = "%b")
+  # 
+Weather_PlotBC_Tmin <- ggplot(Weather_Obs_Sim, aes(x = Date, y = Tmin_Obs, group = 1)) + 
+  geom_line(aes(colour = "Observed"), lwd = 0.3) + 
+  xlab("Time series of temperature data") + 
+  ylab("Daily minimum temperature (°C)") + 
+  geom_line(aes(x = Date, y = Tmin_Sim, colour = "Simulated"), lwd = 0.3) +
+  geom_line(aes(x = Date, y = TminBC, colour = "Bias Corrected"), lwd = 0.3) + 
+  expand_limits(y = c(min(Weather_Obs_Sim$Tmin_Obs), max(Weather_Obs_Sim$Tmin_Obs))) +
+  facet_wrap(~ format(Date, "%Y"), scales = "free_x") +
+  scale_x_date(date_labels = "%b") +
+  scale_color_manual(name = "Data types", values = c("Observed" = "darkblue", "Simulated" = "red", "Bias Corrected" = "orange"))
+
+Weather_PlotBC_Tmin
+
+  ggsave(plot = Weather_PlotBC_Tmin, filename = paste0("D:/Rdata/Plots/", Weather_Names[i],"_Plot_TminBCT.jpeg"), height = 13, width = 24, units = "cm" )
+  
+#Tmax
+
+  #   Weather_PlotBC_Tmax <- ggplot(Weather_Obs_Sim, aes(x = Date, y = Tmax_Obs, group = 1)) + 
+  #   geom_line(lwd=0.3) + 
+  #   xlab("Time series of temperature data") + 
+  #   ylab("Daily maximum temperature (°C)") + 
+  #   #scale_x_discrete(breaks = function(x) x[seq(1, length(x), by = 4*700)]) +
+  #   geom_line(data = Weather_Obs_Sim, aes(x = Date, y = Tmax_Sim), col="blue",lwd=0.3) +
+  #   geom_line(data = Weather_Obs_Sim, aes(x = Date, y = TmaxBC), col="red",lwd=0.3) + 
+  #   #scale_y_continuous(limits = c(-30,45)) + 
+  #   expand_limits(y = c(min(Weather_Obs_Sim$Tmax_Obs), max(Weather_Obs_Sim$Tmax_Obs))) +
+  #   facet_wrap(~ format(Date, "%Y"), scales = "free_x")
+  # 
+  # Weather_PlotBC_Tmax <- Weather_PlotBC_Tmax + scale_x_date(date_labels = "%b")
+  # 
+  Weather_PlotBC_Tmax <- ggplot(Weather_Obs_Sim, aes(x = Date, y = Tmax_Obs, group = 1)) + 
+  geom_line(aes(colour = "Observed"), lwd = 0.3) + 
+  xlab("Time series of temperature data") + 
+  ylab("Daily maximum temperature (°C)") + 
+  geom_line(aes(x = Date, y = Tmax_Sim, colour = "Simulated"), lwd = 0.3) +
+  geom_line(aes(x = Date, y = TmaxBC, colour = "Bias Corrected"), lwd = 0.3) + 
+  expand_limits(y = c(min(Weather_Obs_Sim$Tmax_Obs), max(Weather_Obs_Sim$Tmax_Obs))) +
+  facet_wrap(~ format(Date, "%Y"), scales = "free_x") +
+  scale_x_date(date_labels = "%b") +
+  scale_color_manual(name = "Data Type", values = c("Observed" = "darkblue", "Simulated" = "red", "Bias Corrected" = "orange"))
+
+Weather_PlotBC_Tmax
+
+  ggsave(plot = Weather_PlotBC_Tmax, filename = paste0("D:/Rdata/Plots/", Weather_Names[i],"_Plot_TmaxBCT.jpeg"), height = 13, width = 24, units = "cm" )
+  
+  # kable(Weather_Statistics_BC) %>%
+  #   kable_styling("striped", position = "left", font_size = 10)
+  
+  # Calculating the overall statistics
+  
+  # mean(Weather_Obs_Sim$Tmin_Obs - Weather_Obs_Sim$Tmin_Sim)
+  # mean(Weather_Obs_Sim$Tmin_Obs - Weather_Obs_Sim$TminBC)
+  # 
+  # sd(Weather_Obs_Sim$Tmin_Obs - Weather_Obs_Sim$Tmin_Sim)
+  # sd(Weather_Obs_Sim$Tmin_Obs - Weather_Obs_Sim$TminBC)
+  # 
+  # RMSEP(Weather_Obs_Sim$Tmin_Sim, Weather_Obs_Sim$Tmin_Obs)
+  # RMSEP(Weather_Obs_Sim$TminBC, Weather_Obs_Sim$Tmin_Obs)
+  # 
+  # RPIQ(Weather_Obs_Sim$Tmin_Sim, Weather_Obs_Sim$Tmin_Obs)
+  # RPIQ(Weather_Obs_Sim$TminBC, Weather_Obs_Sim$Tmin_Obs)
+  
+  # Bias correction is completed for the period with available observed data, I am saving it
+  
+  #write.csv(Weather_Obs_Sim, file = paste0("Stations_Obs_Sim/Obs_Sim_", Weather_Names[i], ".csv"), row.names = FALSE)
+  #write.csv(Weather_Statistics_BC, file = paste0("Stations_Obs_Sim/BC_", Weather_Names[i], "_Statistics.csv"), row.names = FALSE)
+    #write.csv(Weather_Statistics_Tmin_Tmax, file = paste0("Stations_Obs_Sim/Tmin_Tmax_", Weather_Names[i], ".csv"), row.names = FALSE)
+
+  
+#   # Bias correction of historical temperature data (with no observed data)
+#   
+#   Weather_Simulated <- read.csv(paste0("D:/Rdata/Stations_Sim/", weather_simulated_files[i]))
+#   
+#   #Renaming the column names of Simulated stations
+#   colnames(Weather_Simulated) <- c("Date", "Tmin_Sim", "Tmax_Sim")
+#    
+#   #Extract the desired time series from simulated stations (1980-2008 in most cases)
+#   start_date2 <- as.Date("1980-01-01")
+#   Weather_Simulated <- Weather_Simulated[as.Date(Weather_Simulated$Date) >=  as.Date(start_date2) & as.Date(Weather_Simulated$Date) <  start_date,]
+#   
+#   #Bias correction
+#   Weather_Simulated$Month <- lubridate::month(Weather_Simulated$Date)
+#   
+#   Weather_Simulated <- merge(Weather_Simulated, Weather_Statistics, by = "Month")
+#   
+#   #Now I will do bias correction for Tmin and Tmax in new columns as Tmin_BC and Tmax_BC:  
+#   # Tmin
+#     Weather_Simulated$TminBC <- Weather_Simulated$Tmin_Sim + Weather_Simulated$Mean_Bias_Tmin
+#     
+#   # Tmax
+#     Weather_Simulated$TmaxBC <- Weather_Simulated$Tmax_Sim + Weather_Simulated$Mean_Bias_Tmax
+#     
+#     #Merging the two temperature series (Observed with bias corrected)
+#     
+#     #1 Cleaning recent (Obs)
+#     #Choosing the wanted columns
+#     Recent_Obs <- Weather_Obs_Sim[,c("Date", "TminBC", "TmaxBC")]
+#     
+#     #Renaming the column names
+#     colnames(Recent_Obs)[2] <- "Tmin"
+#     colnames(Recent_Obs)[3] <- "Tmax"
+# 
+#     #2 Cleaning historic (BC)
+#     #Choosing the wanted columns
+#     Historic_BC <- Weather_Simulated[,c("Date", "TminBC", "TmaxBC")]
+#     
+#     #Renaming the column names
+#     colnames(Historic_BC)[2] <- "Tmin"
+#     colnames(Historic_BC)[3] <- "Tmax"
+# 
+#     # Merging the two data frame by stacking on the top of each other- both rows should have same columns
+#     # Before merging arrange based on dates b/c data is shuffled due to group_by (month)
+#     
+#     # Date in recent obs was unknown so i changed its class to make it similar to historic bc
+#    
+#     Recent_Obs$Date <- as.character(Recent_Obs$Date)
+# 
+# Weather_AT <- rbind(Historic_BC, Recent_Obs)
+# 
+# Weather_AT <- Weather_AT %>% 
+#   arrange(Date)
+# 
+#     #rownames(Weather_AT) <- 1:nrow(Weather_AT)
+#     # print(Weather_AT)
+#     
+#     write.csv(Weather_AT, paste0("Stations_Obs_Sim/AT_", Weather_Names[i], ".csv"))
+    
+  setTxtProgressBar(pb,i)
+    
+  
+}
+
+```
+
+#------------------------------------------------------------------------------------------#
+# 4: Combining all the average statistics of 51 stations into a single table
+#------------------------------------------------------------------------------------------#
+
+```{r}
+# Combining all the average statistics of 51 stations into a single table
+
+#Loading the stations data 
+Weather_Statistics_Tmin_Tmax <-  chillR::load_temperature_scenarios("D:/Rdata/Stations_Obs_Sim", prefix = "Tmin_Tmax_")
+
+#Since the files names are not there, we used list.file to show the names
+filenames <- list.files("Stations_Obs_Sim", pattern = "Tmin_Tmax_", all.files = FALSE)
+#The names are split by _ however there are still three characters now we assign it to 
+#each name using purrr function which works as a loop.
+Station_Names <- str_split(filenames, pattern = "_") %>% 
+  purrr::map_chr(3)
+
+names(Weather_Statistics_Tmin_Tmax) <- Station_Names
+
+#library(dplyr)
+
+# merge all the data frames in the list into one data frame
+All_Statistics <- bind_rows(Weather_Statistics_Tmin_Tmax)
+
+# create a new column with the station names
+All_Statistics$Station_Name <- Station_Names
+
+# rearrange the columns so that the new column is at the start
+All_Statistics <- All_Statistics[, c("Station_Name", colnames(All_Statistics))]
+
+# remove the ".csv" extension from the station names
+All_Statistics$Station_Name <- gsub(".csv", "", All_Statistics$Station_Name)
+
+# Remove the last columns 
+All_Statistics <- All_Statistics[-c(16)]
+
+kable(All_Statistics, digits = 3, caption = "Mean statistics using linear method") %>%
+  kable_styling("striped", position = "left", font_size = 10)
+
+write.csv(All_Statistics, "Stations_Obs_Sim/All_Statistics_Average.csv")
+```
+
+
+#------------------------------------------------------------------------------------------#
+# 05: Mapping different methods of bias correction
+# Line plots for different methods of bias correction: A comparative analysis
+#------------------------------------------------------------------------------------------#
+```{r}
+Adraskan_AT_SimpleLinear <- read.csv("D:/Rdata/Stations_Obs_Sim/Obs_Sim_Adraskan.csv")
+Adraskan_AT_QMLinear <- read.csv("D:/Rdata/QM/Stations_Obs_Sim_QM/Recent_AdraskanQML_BC.csv")
+Adraskan_AT_QMTricub <- read.csv("D:/Rdata/QMT/Stations_Obs_Sim_QMT/Recent_Adraskan_BC_QMT.csv")
+Adraskan_AT_QDeltaM <- read.csv("D:/Rdata/QDM/Stations_Obs_Sim/Calib_Adraskan_QDM.csv")
+Adraskan_AT_QMDDT <- read.csv("D:/Rdata/QMDDT/Stations_Obs_Sim_QMDDT/Recent_Adraskan_BC_QMDDT.csv")
+
+Adraskan_AT_SimpleLinear$Date <- as.Date(Adraskan_AT_SimpleLinear$Date)
+Adraskan_AT_QMLinear$Date <- as.Date(Adraskan_AT_QMLinear$Date)
+Adraskan_AT_QMTricub$Date <- as.Date(Adraskan_AT_QMTricub$Date)
+Adraskan_AT_QDeltaM$Date <- as.Date(Adraskan_AT_QDeltaM$Date)
+Adraskan_AT_QMDDT$Date <- as.Date(Adraskan_AT_QMDDT$Date)
+
+Adraskan_BC_Methods_Plot_Tmin <- ggplot(Adraskan_AT_SimpleLinear, aes(x = Date, y = Tmin_Obs, group = 1)) + 
+  geom_line(lwd=0.3) + 
+  xlab("Time series of temperature data") + 
+  ylab("Daily minimum temperature (°C)") + 
+  #scale_x_discrete(breaks = function(x) x[seq(1, length(x), by = 4*700)]) +
+  geom_line(data = Adraskan_AT_SimpleLinear, aes(x = Date, y = Tmin_Sim), col="blue",lwd=0.3) +
+  geom_line(data = Adraskan_AT_SimpleLinear, aes(x = Date, y = TminBC), col="red",lwd=0.3) + 
+  #geom_line(data = Adraskan_AT_QMLinear, aes(x = Date, y = Station_BC_Tmin_L), col="brown",lwd=0.3) +
+  geom_line(data = Adraskan_AT_QMTricub, aes(x = Date, y = Station_BC_Tmin_L), col="green",lwd=0.3) +
+  #geom_line(data = Adraskan_AT_QDeltaM, aes(x = Date, y = QDM_Tmin), col="purple",lwd=0.3) +
+  #geom_line(data = Adraskan_AT_QMDDT, aes(x = Date, y = Station_BC_Tmin_L), col="grey",lwd=0.3) + 
+  #scale_y_continuous(limits = c(-30,45)) + 
+  expand_limits(y = c(min(Adraskan_AT_SimpleLinear$Tmin_Obs), max(Adraskan_AT_SimpleLinear$Tmin_Obs))) +
+  #facet_wrap(~ format(Date, "%Y"), scales = "free_x")
+  facet_wrap(~ format(Date, "%Y"), scales = "free_x", strip.position = "bottom")
+
+Adraskan_BC_Methods_Plot_Tmin <- Adraskan_BC_Methods_Plot_Tmin + scale_x_date(date_labels = "%b")
+
+ggsave(plot = Adraskan_BC_Methods_Plot_Tmin, "D:/Rdata/BiasCorrMethods/Plots/Adraskan_BC_Methods_Plot_Tmin.jpeg", height = 13, width = 24, units = "cm" )
+
+Adraskan_BC_Methods_Plot_Tmax <- ggplot(Adraskan_AT_SimpleLinear, aes(x = Date, y = Tmax_Obs, group = 1)) + 
+  geom_line(lwd=0.3) + 
+  xlab("Time series of temperature data") + 
+  ylab("Daily maximum temperature (°C)") + 
+  #scale_x_discrete(breaks = function(x) x[seq(1, length(x), by = 4*700)]) +
+  geom_line(data = Adraskan_AT_SimpleLinear, aes(x = Date, y = Tmax_Sim), col="blue",lwd=0.3) +
+  geom_line(data = Adraskan_AT_SimpleLinear, aes(x = Date, y = TmaxBC), col="red",lwd=0.3) + 
+  #geom_line(data = Adraskan_AT_QMLinear, aes(x = Date, y = Station_BC_Tmax_L), col="brown",lwd=0.3) +
+  geom_line(data = Adraskan_AT_QMTricub, aes(x = Date, y = Station_BC_Tmax_L), col="green",lwd=0.3) +
+  #geom_line(data = Adraskan_AT_QDeltaM, aes(x = Date, y = QDM_Tmax), col="purple",lwd=0.3) +
+  #geom_line(data = Adraskan_AT_QMDDT, aes(x = Date, y = Station_BC_Tmax_L), col="grey",lwd=0.3) + 
+  #scale_y_continuous(limits = c(-30,45)) + 
+  expand_limits(y = c(min(Adraskan_AT_SimpleLinear$Tmax_Obs), max(Adraskan_AT_SimpleLinear$Tmax_Obs))) +
+  #facet_wrap(~ format(Date, "%Y"), scales = "free_x")
+  facet_wrap(~ format(Date, "%Y"), scales = "free_x", strip.position = "bottom")
+
+Adraskan_BC_Methods_Plot_Tmax <- Adraskan_BC_Methods_Plot_Tmax + scale_x_date(date_labels = "%b")
+
+ggsave(plot = Adraskan_BC_Methods_Plot_Tmax, "D:/Rdata/BiasCorrMethods/Plots/Adraskan_BC_Methods_Plot_Tmax.jpeg", height = 13, width = 24, units = "cm" )
+```
+
+```{r}
+  # create the heatmap
+  Date <- Adraskan_AT_QMLinear$Date
+  Year <- Adraskan_AT_QMLinear$Year
+  Month <- Adraskan_AT_QMLinear$Month
+  Tmin_Obs <-  Adraskan_AT_QMLinear$Tmin_Obs
+  Tmin_Sim <-  Adraskan_AT_QMLinear$Tmin_Sim
+  
+  #melting had error below, so we need to reorder the simple linear Adraskan
+  Arranged_Adraskan_Linear <- Adraskan_AT_SimpleLinear[order(as.Date(Adraskan_AT_SimpleLinear$Date, format="%m/%d/%Y")),]
+  Tmin_BC_SimpleLinear <- Arranged_Adraskan_Linear$TminBC
+  Tmin_BC_QML <- Adraskan_AT_QMLinear$Station_BC_Tmin_L
+  Tmin_BC_QDM <- Adraskan_AT_QDeltaM$QDM_Tmin
+  Tmin_BC_QMT <- Adraskan_AT_QMTricub$Station_BC_Tmin_L
+  Tmin_BC_QMDDT <- Adraskan_AT_QMDDT$Station_BC_Tmin_L
+  
+  df_Tmin <- data.frame(Date, Year, Month, Tmin_Obs, Tmin_Sim, Tmin_BC_SimpleLinear,Tmin_BC_QML,Tmin_BC_QDM, Tmin_BC_QMT,Tmin_BC_QMDDT)
+  
+  # convert data to long format
+  Adraskan_ggQMT_Tmin <- melt(df_Tmin, id.vars = c("Date", "Year", "Month"))
+
+  Adraskan_ggQMT_Tmin <- ggplot(Adraskan_ggQMT_Tmin, aes(x = Month, y = variable, fill = value)) +
+    geom_tile() +
+    scale_fill_gradient(low = "white",  high = "red")+
+    ggtitle("Tmin")+
+    xlab(NULL)+
+    ylab(NULL)
+    # geom_rect(aes(xmin = min(Month) - 0.5, xmax = max(Month) + 0.5, ymin = 0.5, ymax = 0.5), 
+    #           fill = NA, color = "White") +
+    # geom_rect(aes(xmin = min(Month) - 0.5, xmax = max(Month) + 0.5, ymin = 1.5, ymax = 1.5), 
+    #           fill = NA, color = "White") +
+    # geom_rect(aes(xmin = min(Month) - 0.5, xmax = max(Month) + 0.5, ymin = 2.5, ymax = 2.5), 
+   #           fill = NA, color = "white")    
+    #facet_wrap(~ Year)
+
+  Adraskan_ggQMT_Tmin <- Adraskan_ggQMT_Tmin + theme(plot.title = element_text(hjust = 0.5))
+  
+  #Tmax
+  Tmax_Obs <-  Adraskan_AT_QMLinear$Tmax_Obs
+  Tmax_Sim <-  Adraskan_AT_QMLinear$Tmax_Sim
+  Tmax_BC_SimpleLinear <- Arranged_Adraskan_Linear$TmaxBC
+  Tmax_BC_QML <- Adraskan_AT_QMLinear$Station_BC_Tmax_L
+  Tmax_BC_QDM <- Adraskan_AT_QDeltaM$QDM_Tmax
+  Tmax_BC_QMT <- Adraskan_AT_QMTricub$Station_BC_Tmax_L
+  Tmax_BC_QMDDT <- Adraskan_AT_QMDDT$Station_BC_Tmax_L
+  
+  df_Tmax <- data.frame(Date, Year, Month, Tmax_Obs, Tmax_Sim,Tmax_BC_SimpleLinear,Tmax_BC_QML,Tmax_BC_QDM,Tmax_BC_QMT,Tmax_BC_QMDDT)
+
+  # convert data to long format
+  Adraskan_ggQMT_Tmax <- melt(df_Tmax, id.vars = c("Date", "Year", "Month"))
+
+  Adraskan_ggQMT_Tmax <- ggplot(Adraskan_ggQMT_Tmax, aes(x = Month, y = variable, fill = value)) +
+    geom_tile() +
+    scale_fill_gradient(low = "white",  high = "red")+
+    ggtitle("Tmax")+
+    xlab(NULL)+
+    ylab(NULL)
+  
+  Adraskan_ggQMT_Tmax <- Adraskan_ggQMT_Tmax + theme(plot.title = element_text(hjust = 0.5))
+  
+    #coord_fixed(ratio = 150)
+  
+  require(gridExtra)
+  Adraskan_ggQMT_Both <- grid.arrange(Adraskan_ggQMT_Tmin, Adraskan_ggQMT_Tmax, ncol = 2, left = "Observed, Simulated and Bias-Corrected Temperature (°C)", 
+                             bottom = "Month-Based Temperature Time Series")
+  
+
+  ggsave(plot = Adraskan_ggQMT_Both, filename = "D:/Rdata/BiasCorrMethods/Plots/Adraskan_ggQMT_Both.jpeg", height = 13, width = 24, units = "cm")
+  
+```
+
+
+# Loop the function for comparsion of bias correction methods
+
+```{r}
+SimpleLinear_List <-  chillR::load_temperature_scenarios("D:/Rdata/Stations_Obs_Sim", prefix = "Obs_Sim_")
+QML_List <-  chillR::load_temperature_scenarios("D:/Rdata/QM/Stations_Obs_Sim_QM", prefix = "Recent_")
+QMT_List <-  chillR::load_temperature_scenarios("D:/Rdata/QMT/Stations_Obs_Sim_QMT", prefix = "Recent_")
+QDM_List <-  chillR::load_temperature_scenarios("D:/Rdata/QDM/Stations_Obs_Sim", prefix = "Calib_")
+QMDDT_List <-  chillR::load_temperature_scenarios("D:/Rdata/QMDDT/Stations_Obs_Sim_QMDDT", prefix = "Recent_")
+
+names <- list.files("D:/Rdata/QDM/Stations_Obs")
+#The names are split by _ however there are still three characters now we assign it to 
+#each name using purrr function which works as a loop.
+station_names <- str_split(names, pattern = "_") %>% 
+  purrr::map_chr(1)
+
+#assign the list of names to the data set
+names(SimpleLinear_List) <- station_names
+names(QML_List) <- station_names
+names(QMT_List) <- station_names
+names(QDM_List) <- station_names
+#names(QMT_List) <- station_names
+
+pb = txtProgressBar(min = 0, max = length(SimpleLinear_List), initial = 0, style = 3) 
+
+for(i in 1:length(SimpleLinear_List)){
+  SimpleLinear <- SimpleLinear_List[[i]]
+  QML <- QML_List[[i]]
+  QMT <- QMT_List[[i]]
+  QDM <- QDM_List[[i]]
+
+SimpleLinear$Date <- as.Date(SimpleLinear$Date)
+QML$Date <- as.Date(QML$Date)
+QMT$Date <- as.Date(QMT$Date)
+QDM$Date <- as.Date(QDM$Date)
+#Adraskan_AT_QMDDT$Date <- as.Date(Adraskan_AT_QMDDT$Date)
+
+#mylist <- lapply(mylist, transform , date = as.Date(date,"%Y-%m-%d"))
+# lapply(SimpleLinear_List, transform, Date= as.Date(Date,"%Y-%m-%d"))
+# lapply(QML_List, transform, Date= as.Date(Date, "%Y-%m-%d"))
+# lapply(QMT_List, transform, Date= as.Date(Date, "%Y-%m-%d"))
+# lapply(QDM_List, transform, Date= as.Date(Date, "%Y-%m-%d"))
+
+BC_Methods_Plot_Tmin <- ggplot(SimpleLinear, aes(x = Date, y = Tmin_Obs, group = 1)) + 
+  geom_line(lwd=0.3) + 
+  xlab("Time series of temperature data") + 
+  ylab("Daily minimum temperature (°C)") + 
+  #scale_x_discrete(breaks = function(x) x[seq(1, length(x), by = 4*700)]) +
+  geom_line(data = SimpleLinear, aes(x = Date, y = Tmin_Sim), col="blue",lwd=0.3) +
+  geom_line(data = SimpleLinear, aes(x = Date, y = TminBC), col="red",lwd=0.3) + 
+  geom_line(data = QML, aes(x = Date, y = Station_BC_Tmin_L), col="brown",lwd=0.3) +
+  geom_line(data = QMT, aes(x = Date, y = Station_BC_Tmin_L), col="green",lwd=0.3) +
+  geom_line(data = QDM, aes(x = Date, y = QDM_Tmin), col="purple",lwd=0.3) +
+  #geom_line(data = Adraskan_AT_QMDDT, aes(x = Date, y = Station_BC_Tmin_L), col="grey",lwd=0.3) + 
+  #scale_y_continuous(limits = c(-30,45)) + 
+  expand_limits(y = c(min(SimpleLinear$Tmin_Obs), max(SimpleLinear$Tmin_Obs))) +
+  #facet_wrap(~ format(Date, "%Y"), scales = "free_x")
+  facet_wrap(~ format(Date, "%Y"), scales = "free_x", strip.position = "bottom")
+
+BC_Methods_Plot_Tmin <- BC_Methods_Plot_Tmin + scale_x_date(date_labels = "%b")
+
+#Add legend to colors specified 
+BC_Methods_Plot_Tmin <- BC_Methods_Plot_Tmin +
+  scale_color_manual(values = c("black", "blue", "red", "brown", "green", "purple"),
+                     labels = c("Observed", "Simulated", "Simple Linear", "Quantile Mapping-Linear", "Quantile Mapping-Tricub", "Quantile Delta Mapping")) +
+  theme(legend.position = "right")
+
+
+ggsave(plot = BC_Methods_Plot_Tmin, filename= paste0("D:/Rdata/BiasCorrMethods/Plots/BCMethods", station_names[i], "_Tmin.jpeg"), height = 13, width = 24, units = "cm" )
+
+
+BC_Methods_Plot_Tmax <- ggplot(SimpleLinear, aes(x = Date, y = Tmax_Obs, group = 1)) + 
+  geom_line(lwd=0.3) + 
+  xlab("Time series of temperature data") + 
+  ylab("Daily maximum temperature (°C)") + 
+  #scale_x_discrete(breaks = function(x) x[seq(1, length(x), by = 4*700)]) +
+  geom_line(data = SimpleLinear, aes(x = Date, y = Tmax_Sim), col="blue",lwd=0.3) +
+  geom_line(data = SimpleLinear, aes(x = Date, y = TmaxBC), col="red",lwd=0.3) + 
+  geom_line(data = QML, aes(x = Date, y = Station_BC_Tmax_L), col="brown",lwd=0.3) +
+  geom_line(data = QMT, aes(x = Date, y = Station_BC_Tmax_L), col="green",lwd=0.3) +
+  geom_line(data = QDM, aes(x = Date, y = QDM_Tmax), col="purple",lwd=0.3) +
+  #geom_line(data = Adraskan_AT_QMDDT, aes(x = Date, y = Station_BC_Tmax_L), col="grey",lwd=0.3) + 
+  #scale_y_continuous(limits = c(-30,45)) + 
+  expand_limits(y = c(min(SimpleLinear$Tmax_Obs), max(SimpleLinear$Tmax_Obs))) +
+  #facet_wrap(~ format(Date, "%Y"), scales = "free_x")
+  facet_wrap(~ format(Date, "%Y"), scales = "free_x", strip.position = "bottom")
+
+BC_Methods_Plot_Tmax <- BC_Methods_Plot_Tmax + scale_x_date(date_labels = "%b")
+
+#Add legend to colors specified 
+BC_Methods_Plot_Tmax +
+  scale_color_manual(values = c("black", "blue", "red", "brown", "green", "purple"),
+                     labels = c("Observed", "Simulated", "Simple Linear", "Quantile Mapping-Linear", "Quantile Mapping-Tricub", "Quantile Delta Mapping")) +
+    theme(legend.position = "right")
+
+
+ggsave(plot = BC_Methods_Plot_Tmax, filename= paste0("D:/Rdata/BiasCorrMethods/Plots/BCMethods", station_names[i], "_Tmax.jpeg"), height = 13, width = 24, units = "cm" )
+setTxtProgressBar(pb,i)
+}
+```
+
+
+

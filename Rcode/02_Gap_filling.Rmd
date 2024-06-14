@@ -1,0 +1,327 @@
+---
+title: "BiasCorrection"
+author: "Atifullah Shinwari"
+date: "2023-01-25"
+output: html_document
+---
+
+#------------------------------------------------------------------------------------------#
+# # Gap filling in observed temperature data for a few stations
+#------------------------------------------------------------------------------------------#
+
+# Gap filling:
+
+After doing a bias correction for all the stations and calculating the statistics I have found some minor and two major gaps in the data. Minor gaps were one day gap which was filled by taking the average of value before and after. The major gaps were in the two stations i.e. Maton and Eshkashim, it was filled from neighboring stations. The patch work done is given as below:
+
+# 01: Maton station
+
+```{r}
+require(chillR)
+require(tidyverse)
+require(kableExtra)
+Maton<-read.csv("D:/Rdata/Patch_work/Maton_AT_MEW.csv")
+
+Maton_QC<-fix_weather(Maton)$QC
+
+kable(Maton_QC, caption="Quality control summary produced by *fix_weather()*") %>%
+  kable_styling("striped", position = "left", font_size = 10)
+```
+
+```{r}
+station_list_Maton<-handle_gsod(action="list_stations",location=c(69.93,33.35),time_interval=c(2005,2022))
+```
+
+```{r}
+kable(station_list_Maton, caption="List of GSOD weather stations close to Maton") %>%
+  kable_styling("striped", position = "left", font_size = 10)
+```
+
+```{r}
+positions_in_station_list<-c(1)
+patch_weather_Maton<-list()
+for(i in 1:length(positions_in_station_list))
+  {patch_weather_Maton[[i]]<-handle_gsod(handle_gsod(action="download_weather",
+                                   location=station_list_Maton$chillR_code[
+                                     positions_in_station_list[i]],
+                                   time_interval = c(2005,2014)))[[i]]$weather
+  names(patch_weather_Maton)[i]<-station_list_Maton$STATION.NAME[
+    positions_in_station_list[i]]
+}
+
+write.csv(patch_weather_Maton$KHOST, "D:/Rdata/Patch_work/Khost4Maton_fromHGSOD.csv")
+```
+
+```{r}
+patch_weather_Maton<-read.csv("D:/Rdata/Patch_work/Khost4Maton_fromHGSOD.csv")
+patched_Maton<-patch_daily_temperatures(weather = Maton,
+                                  patch_weather = patch_weather_Maton)
+```
+
+```{r}
+kable(patched_Maton$statistics[[1]],
+      caption=paste("Patch statistics for",
+                    names(patched_Maton$statistics)[1])) %>%
+    kable_styling("striped", position = "left", font_size = 10)
+```
+
+```{r}
+Fixed_gaps_maton <- fix_weather(patched_Maton)
+
+kable(Fixed_gaps_maton$QC, caption="Quality control summary produced by *fix_weather()*, with all days interpolated") %>%
+  kable_styling("striped", position = "left", font_size = 10)
+
+write.csv(Fixed_gaps_maton$weather, "D:/Rdata/Patch_work/Maton_AT_Patched.csv")
+write.csv(Fixed_gaps_maton$QC, "D:/Rdata/Patch_work/Maton_QC.csv")
+write.csv(patched_Maton$statistics, "D:/Rdata/Patch_work/Maton_QC_Khost.csv" )
+```
+
+Maton has a lack of data from 2008 to 2018 was patched from the closest station (Khost), which is located 1.86 km. The results were pretty acceptable in terms of mean bias and standard deviation as calculated above. After patching 2 gaps were there which were filled by the fixed_weather function taking the average of values before and after.
+
+# 02: Eshkashim
+
+```{r}
+Eshkashem <- read.csv("D:/Rdata/Patch_work/Eshkashem_AT_Obs.csv")
+```
+
+```{r}
+station_list_Eshkashem<-handle_gsod(action="list_stations",location=c(71.59,36.73),time_interval=c(2005,2022))
+```
+
+```{r}
+kable(station_list_Eshkashem, caption="List of GSOD weather stations close to Eshkashim") %>%
+  kable_styling("striped", position = "left", font_size = 10)
+```
+
+```{r}
+positions_in_station_list<-c(1)
+patch_weather_Eshkashem<-list()
+for(i in 1:length(positions_in_station_list))
+  {patch_weather_Eshkashem[[i]]<-handle_gsod(handle_gsod(action="download_weather",
+                                   location=station_list_Eshkashem$chillR_code[
+                                     positions_in_station_list[i]],
+                                   time_interval = c(2010,2020)))[[i]]$weather
+  names(patch_weather_Eshkashem)[i]<-station_list_Eshkashem$STATION.NAME[
+    positions_in_station_list[i]]
+}
+write.csv(patch_weather_Eshkashem$ISHKASHIM, "D:/Rdata/Patch_work/Ishkashim4Eshkashim_fromHGSOD.csv")
+```
+
+```{r}
+patch_weather_Eshkashim<-read.csv("D:/Rdata/Patch_work/Ishkashim4Eshkashim_fromHGSOD.csv")
+patched_Eshkashem<-patch_daily_temperatures(weather = Eshkashem,
+                                  patch_weather = patch_weather_Eshkashem)
+```
+
+```{r}
+kable(patched_Eshkashem$statistics[[1]],
+      caption=paste("Patch statistics for",
+                    names(patched_Eshkashem$statistics)[1])) %>%
+    kable_styling("striped", position = "left", font_size = 10)
+```
+
+```{r}
+Fixed_gaps_eshkashem <- fix_weather(patched_Eshkashem)
+```
+
+```{r}
+write.csv(Fixed_gaps_eshkashem$weather, "D:/Rdata/Patch_work/Eshkashem_AT_Obs.csv")
+write.csv(Fixed_gaps_eshkashem$QC, "D:/Rdata/Patch_work/Eshkashem_QC.csv")
+write.csv(patched_Eshkashem$statistics, "D:/Rdata/Patch_work/Eshkashem_QC_Ishkashim.csv")
+```
+
+Eshkashim station has 11 days gap from 12.09.2018 to 22.09.2018, which was filled from the closest station called Ishkashim (Located in Tirmiz) with a distance of 1.7 km. Statistics are stated as above. A gap of one day remained was filled using the fix_weather by an average of the value before and after.
+
+# 03: NazdikiKandahar
+
+There were 501 days gaps: It was filled from two stations nearby i.e. Pasab/wilson filled 85 gaps and Kandahar filled 333 gaps, 83 gaps still there which were filled by fix_weather. The statistics is also saved for further consideration, SD is a bit high as 2.7 and 2.5.
+
+```{r}
+Kandahar <- read.csv("D:/Rdata/Patch_work/NazdikiKandahar_AT_Obs.csv")
+```
+
+```{r}
+station_list_NazdikiKandahar<-handle_gsod(action="list_stations",location=c(65.57,31.61),time_interval=c(2005,2020))
+```
+
+```{r}
+kable(station_list_NazdikiKandahar, caption="List of GSOD weather stations close to Kandahar") %>%
+  kable_styling("striped", position = "left", font_size = 10)
+```
+
+```{r}
+positions_in_station_list<-c(1)
+patch_weather_NazdikiKandahar<-list()
+for(i in 1:length(positions_in_station_list))
+  {patch_weather_NazdikiKandahar[[i]]<-handle_gsod(handle_gsod(action="download_weather",
+                                   location=station_list_NazdikiKandahar$chillR_code[
+                                     positions_in_station_list[i]],
+                                   time_interval = c(2008,2020)))[[i]]$weather
+  names(patch_weather_NazdikiKandahar)[i]<-station_list_NazdikiKandahar$STATION.NAME[
+    positions_in_station_list[i]]
+}
+write.csv(patch_weather_NazdikiKandahar$`FOB PASAB/WILSON`, "D:/Rdata/Patch_work/FobWilson4NazdikiKandaharHGSOD.csv")
+```
+
+```{r}
+patch_weather_NazdikiKandahar <- read.csv("D:/Rdata/Patch_work/FobWilson4NazdikiKandaharHGSOD.csv")
+patched_Kandahar1<-patch_daily_temperatures(weather = Kandahar,
+                                  patch_weather = patch_weather_NazdikiKandahar)
+```
+
+```{r}
+kable(patched_Kandahar1$statistics[[1]],
+      caption=paste("Patch statistics for",
+                    names(patched$statistics)[1])) %>%
+    kable_styling("striped", position = "left", font_size = 10)
+```
+
+```{r}
+positions_in_station_list<-c(3)
+patch_weather_NazdikiKandahar2<-list()
+for(i in 1:length(positions_in_station_list))
+  {patch_weather_NazdikiKandahar2[[i]]<-handle_gsod(handle_gsod(action="download_weather",
+                                   location=station_list_NazdikiKandahar$chillR_code[
+                                     positions_in_station_list[i]],
+                                   time_interval = c(2008,2020)))[[i]]$weather
+  names(patch_weather_NazdikiKandahar2)[i]<-station_list_NazdikiKandahar$STATION.NAME[
+    positions_in_station_list[i]]
+}
+write.csv(patch_weather_NazdikiKandahar2, "D:/Rdata/Patch_work/Kandahar4NazdikiKandaharHGSOD.csv")
+```
+
+```{r}
+patch_weather_NazdikiKandahar2 <- read.csv("D:/Rdata/Patch_work/Kandahar4NazdikiKandaharHGSOD.csv")
+patched_Kandahar2<-patch_daily_temperatures(weather = patched_Kandahar1$weather,
+                                  patch_weather = patch_weather_NazdikiKandahar2)
+
+write.csv(patched_Kandahar2$weather, "D:/Rdata/Patch_work/NazdikiKandahar_83daysgaps.csv")
+```
+
+```{r}
+# Plotting with filled gaps but 83 days remainng
+ggplot(patched_Kandahar2$weather, aes(x = patched_Kandahar2$weather$DATE, y = patched_Kandahar2$weather$Tmin, group = 1)) + 
+    geom_line(lwd=0.3) + 
+    xlab("Time series of temperature data") + 
+    ylab("Daily minimum temperature (°C)") + 
+    #scale_x_discrete(breaks = function(x) x[seq(1, length(x), by = 4*700)]) +
+    geom_line(data = patched_Kandahar2$weather, aes(x = patched_Kandahar2$weather$DATE, y = patched_Kandahar2$weather$Tmax), col="blue",lwd=0.3) +
+    #scale_y_continuous(limits = c(-30,45)) + 
+    #expand_limits(y = c(min(StationQMT_Obs_Sim$Tmin_Obs), max(StationQMT_Obs_Sim$Tmin_Obs))) +
+    facet_wrap(~ format(DATE, "%Y"), scales = "free_x")
+```
+
+```{r}
+#Plotting with all gaps
+ggplot(Kandahar, aes(x = Date, y = Tmin, group = 1)) + 
+    geom_line(lwd=0.3) + 
+    xlab("Time series of temperature data") + 
+    ylab("Daily minimum temperature (°C)") + 
+    #scale_x_discrete(breaks = function(x) x[seq(1, length(x), by = 4*700)]) +
+    geom_line(data = Kandahar, aes(x = Date, y = Tmax), col="blue",lwd=0.3) +
+    #scale_y_continuous(limits = c(-30,45)) + 
+    #expand_limits(y = c(min(StationQMT_Obs_Sim$Tmin_Obs), max(StationQMT_Obs_Sim$Tmin_Obs))) +
+    facet_wrap(~ format(as.Date(Date), "%Y"), scales = "free_x")
+```
+
+```{r}
+kable(patched_Kandahar2$statistics[[1]],
+      caption=paste("Patch statistics for",
+                    names(patched_Kandahar2$statistics)[1])) %>%
+    kable_styling("striped", position = "left", font_size = 10)
+```
+
+For "FOB FRONTENAC" as one of the nearby station, no gaps were filled and the SD were high (2.8).
+
+I then tried for Sakari Karez which is in 58 km but it also could not filled the gaps.and the SD were high (3).
+
+```{r}
+NazdikiKandahar <- fix_weather(patched_Kandahar2$weather)
+write.csv(NazdikiKandahar$weather, "D:/Rdata/Patch_work/NazdikiKandahar_AT_Patched.csv")
+write.csv(NazdikiKandahar$QC, "D:/Rdata/Patch_work/NazdikiKandahar_QC.csv")
+write.csv(patched_Kandahar1$statistics, "D:/Rdata/Patch_work/NazdikiKandahar_QC_PasabWilson.csv")
+write.csv(patched_Kandahar2$statistics, "D:/Rdata/Patch_work/NazdikiKandahar_QC_Kandahar.csv")
+```
+
+# 04: Dakah
+
+I have worked on filling the gaps for Dakah station; there were almost 1023 gaps from 2008:2020. I have found two stations nearby i.e. Jalalabad and Peshawar. Both stations were at a distance of 16km in opposite direction, from Jalalabad 155 gaps were filled while from Peshawar 879 gaps were filled, the 3 gaps remaining were filled using fix_weather function. Statistics are also mentioned below and also saved in Patch_work folder. There is a sudden drop in temperature which can be seen quite clearly in the plot therefore I tried to detect it and found that the drop was in the real observed data and not the patched/filled part.
+
+```{r}
+Dakah <- read.csv("D:/Rdata/Patch_work/Dakah_AT_Obs.csv")
+```
+
+```{r}
+station_list_Dakah<-handle_gsod(action="list_stations",location=c(71.03,34.23),time_interval=c(2005,2020))
+```
+
+```{r}
+kable(station_list_Dakah, caption="List of GSOD weather stations close to Dakah") %>%
+  kable_styling("striped", position = "left", font_size = 10)
+```
+
+```{r}
+positions_in_station_list<-c(5)
+patch_weather_Dakah<-list()
+for(i in 1:length(positions_in_station_list))
+  {patch_weather_Dakah[[i]]<-handle_gsod(handle_gsod(action="download_weather",
+                                   location=station_list_Dakah$chillR_code[
+                                     positions_in_station_list[i]],
+                                   time_interval = c(2008,2020)))[[i]]$weather
+  names(patch_weather_Dakah)[i]<-station_list_Dakah$STATION.NAME[
+    positions_in_station_list[i]]
+}
+write.csv(patch_weather_Dakah$JALALABAD, "D:/Rdata/Patch_work/Jalalabad4Dakah_fromHGSOD.csv")
+```
+
+```{r}
+
+patch_weather_Dakah <- read.csv("D:/Rdata/Patch_work/Jalalabad4Dakah_fromHGSOD.csv")
+patched_Dakah<-patch_daily_temperatures(weather = Dakah,
+                                  patch_weather = patch_weather_Dakah)
+```
+
+```{r}
+kable(patched_Dakah$statistics[[1]],
+      caption=paste("Patch statistics for",
+                    names(patched_Dakah$statistics)[1])) %>%
+    kable_styling("striped", position = "left", font_size = 10)
+```
+
+```{r}
+positions_in_station_list<-c(6)
+patch_weather_Dakah1<-list()
+for(i in 1:length(positions_in_station_list))
+  {patch_weather_Dakah1[[i]]<-handle_gsod(handle_gsod(action="download_weather",
+                                   location=station_list_Dakah$chillR_code[
+                                     positions_in_station_list[i]],
+                                   time_interval = c(2008,2020)))[[i]]$weather
+  names(patch_weather_Dakah1)[i]<-station_list_Dakah$STATION.NAME[
+    positions_in_station_list[i]]
+}
+write.csv(patch_weather_Dakah1$PESHAWAR, "D:/Rdata/Patch_work/Peshawar4Dakah_fromHGSOD.csv")
+```
+
+```{r}
+patch_weather_Dakah1 <- read.csv("D:/Rdata/Patch_work/Peshawar4Dakah_fromHGSOD.csv")
+
+patched_Dakah1<-patch_daily_temperatures(weather = patched_Dakah$weather,
+                                  patch_weather = patch_weather_Dakah1)
+```
+
+```{r}
+kable(patched_Dakah1$statistics[[1]],
+      caption=paste("Patch statistics for",
+                    names(patched_Dakah1$statistics)[1])) %>%
+    kable_styling("striped", position = "left", font_size = 10)
+```
+
+```{r}
+Fixed_gaps_Dakah <- fix_weather(patched_Dakah1$weather)
+write.csv(Fixed_gaps_Dakah$weather, "D:/Rdata/Patch_work/Dakah_AT_Patched.csv")
+
+write.csv(patched_Dakah$statistics, "D:/Rdata/Patch_work/Dakah_QC_Jalalabad.csv")
+write.csv(patched_Dakah1$statistics, "D:/Rdata/Patch_work/Dakah_QC_Peshawar.csv")
+write.csv(patched_Dakah$QC, "D:/Rdata/Patch_work/Dakah_QC.csv")
+```
+
+
